@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b4d2c">
+  <title>Spider Solitaire</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Spider</h1>
+    <button id="version" type="button" class="version" data-state="checking" aria-label="Checking for updates…"><i></i><span></span></button>
+    <div id="stats">
+      <span id="mode"></span>
+      <span>Score <b id="score">500</b></span>
+      <span>Moves <b id="moves">0</b></span>
+      <span><b id="time">0:00</b></span>
+    </div>
+  </header>
+
+  <main id="board" aria-label="Table"></main>
+
+  <nav id="controls">
+    <button id="new" type="button" class="ctl">New game</button>
+    <span class="grow"></span>
+    <button id="undo-all" type="button" class="ctl">Undo all</button>
+    <button id="undo" type="button" class="ctl primary">Undo</button>
+  </nav>
+
+  <div id="toast" role="status" hidden></div>
+
+  <dialog id="new-dialog">
+    <h2>New game</h2>
+    <p>Choose a difficulty.</p>
+    <div class="choices">
+      <button type="button" data-suits="1"><b>Easy</b><small>1 suit ♠&#xFE0E;</small></button>
+      <button type="button" data-suits="2"><b>Medium</b><small>2 suits ♠&#xFE0E; ♥&#xFE0E;</small></button>
+      <button type="button" data-suits="4"><b>Hard</b><small>4 suits ♠&#xFE0E; ♥&#xFE0E; ♣&#xFE0E; ♦&#xFE0E;</small></button>
+    </div>
+    <button type="button" class="cancel" value="cancel">Cancel</button>
+  </dialog>
+
+  <dialog id="win-dialog">
+    <h2>You won!</h2>
+    <p id="win-text"></p>
+    <button type="button" id="win-new" class="primary">New game</button>
+  </dialog>
+</body>
+</html>
