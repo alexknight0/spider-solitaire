@@ -25,6 +25,7 @@ let won = false;
 let busy = false; // true while a finished run is flying to the foundation
 
 function save() {
+  if (!S.stock.length && !S.found.length && S.cols.every((c) => !c.length)) return; // blank table before the first deal
   localStorage.setItem(SAVE_KEY, JSON.stringify({ s: S, history, moves, elapsed, won }));
 }
 
@@ -342,10 +343,125 @@ function undoAll() {
   save();
 }
 
-function win() {
+function win({ animate = true } = {}) {
   won = true;
   $("#win-text").textContent = `Score ${score()} in ${moves} moves, ${formatTime(elapsed)} (${MODE_LABEL[S.suits]}).`;
-  $("#win-dialog").showModal();
+  const show = () => $("#win-dialog").showModal();
+  if (animate && !reduceMotion.matches) celebrate(show);
+  else show();
+}
+
+// ---------------------------------------------------------------- win animation
+// Like the old Windows Solitaire finish: cards leave the foundation one at a time and bounce
+// across the table, leaving a trail of copies behind them. Tapping skips to the win dialog;
+// closing the dialog clears the table again.
+
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const LAUNCH_MS = 120;
+const GRAVITY = 0.6; // px per frame², for 40 px cards
+let celebration = null; // { canvas, raf, done, finished }
+
+function cardImage(id, dpr) {
+  const { cw, ch } = L;
+  const c = document.createElement("canvas");
+  c.width = Math.ceil(cw * dpr);
+  c.height = Math.ceil(ch * dpr);
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  const { suit, rank } = cardOf(S.suits, id);
+  const font = '"Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
+  g.beginPath();
+  g.roundRect(0.5, 0.5, cw - 1, ch - 1, cw * 0.09);
+  g.fillStyle = "#fff";
+  g.fill();
+  g.strokeStyle = "rgba(0, 0, 0, .55)";
+  g.lineWidth = 1;
+  g.stroke();
+  g.fillStyle = suit === "H" || suit === "D" ? "#c8102e" : "#1b1b1b";
+  g.textBaseline = "top";
+  g.font = `700 ${Math.max(11, cw * 0.3)}px ${font}`;
+  g.fillText(RANK[rank] + SYMBOL[suit], cw * 0.07, ch * 0.03);
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.font = `${cw * 0.62}px ${font}`;
+  g.fillText(SYMBOL[suit], cw / 2, ch * 0.58);
+  return c;
+}
+
+function celebrate(done) {
+  stopCelebration();
+  const dpr = devicePixelRatio || 1;
+  const canvas = document.createElement("canvas");
+  canvas.className = "celebration";
+  canvas.width = Math.round(L.W * dpr);
+  canvas.height = Math.round(L.H * dpr);
+  board.append(canvas);
+  const g = canvas.getContext("2d");
+  g.scale(dpr, dpr);
+
+  // Top card of each pile in turn (the Kings first), like dealing off the foundations.
+  const order = [];
+  for (let k = 0; k < 13; k++) S.found.forEach((run) => run[k] !== undefined && order.push(run[k]));
+  const unit = L.cw / 40; // speeds below are tuned for 40 px cards at 60 fps
+  const flying = [];
+  let next = 0;
+  let lastLaunch = -Infinity;
+  let last = performance.now();
+  const c = (celebration = { canvas, raf: 0, done, finished: false });
+
+  const frame = (now) => {
+    const dt = Math.min(3, (now - last) / (1000 / 60));
+    last = now;
+    if (next < order.length && now - lastLaunch >= LAUNCH_MS) {
+      const id = order[next++];
+      const p = pos[id];
+      cardEls[id].hidden = true;
+      // The foundation is at the bottom, so throw each card up to a random 25–75% of the table height.
+      const rise = (0.25 + Math.random() * 0.5) * (p.y + L.ch);
+      flying.push({ img: cardImage(id, dpr), x: p.x, y: p.y, vx: (2 + Math.random() * 5) * unit, vy: -Math.sqrt(2 * GRAVITY * unit * rise) });
+      lastLaunch = now;
+    }
+    const floor = L.H - L.ch;
+    for (let i = flying.length - 1; i >= 0; i--) {
+      const f = flying[i];
+      f.vy += GRAVITY * unit * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      if (f.y > floor) {
+        f.y = floor;
+        f.vy *= -0.75;
+      }
+      if (f.x > L.W) {
+        flying.splice(i, 1);
+        continue;
+      }
+      g.drawImage(f.img, f.x, f.y, L.cw, L.ch);
+    }
+    if (next >= order.length && !flying.length) {
+      finishCelebration();
+      return;
+    }
+    c.raf = requestAnimationFrame(frame);
+  };
+  c.raf = requestAnimationFrame(frame);
+  canvas.addEventListener("pointerdown", finishCelebration);
+}
+
+// The animation is over (or skipped): leave the trails on screen and show the dialog.
+function finishCelebration() {
+  const c = celebration;
+  if (!c || c.finished) return;
+  c.finished = true;
+  cancelAnimationFrame(c.raf);
+  c.done();
+}
+
+function stopCelebration() {
+  if (!celebration) return;
+  cancelAnimationFrame(celebration.raf);
+  celebration.canvas.remove();
+  celebration = null;
+  cardEls.forEach((el, id) => (el.hidden = !pos[id]));
 }
 
 function shake(ids) {
@@ -480,6 +596,7 @@ $("#winnable").addEventListener("change", (e) => {
 newDialog.querySelector(".cancel").addEventListener("click", () => newDialog.close());
 newDialog.addEventListener("click", (e) => { if (e.target === newDialog) newDialog.close(); });
 
+$("#win-dialog").addEventListener("close", stopCelebration);
 $("#win-new").addEventListener("click", () => {
   $("#win-dialog").close();
   requestGame(S.suits);
@@ -505,6 +622,7 @@ let resizeRaf = 0;
 window.addEventListener("resize", () => {
   cancelAnimationFrame(resizeRaf);
   resizeRaf = requestAnimationFrame(() => {
+    finishCelebration(); // the canvas is sized for the old layout
     layout();
     render({ instant: true });
   });
@@ -583,7 +701,7 @@ layout();
 if (load()) {
   buildCards();
   render({ instant: true });
-  if (won) win();
+  if (won) win({ animate: false });
   prepareNext(S.suits);
 } else {
   // A blank table until the first deal arrives.
@@ -594,4 +712,4 @@ if (load()) {
 }
 
 // Exposed for tests.
-window.__spider = { get state() { return S; }, set state(s) { S = s; history = []; moves = 0; render({ instant: true }); }, autoTarget };
+window.__spider = { get state() { return S; }, set state(s) { S = s; history = []; moves = 0; won = false; render({ instant: true }); }, autoTarget };

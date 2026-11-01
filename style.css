@@ -156,6 +156,15 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 }
 .card.hint-from { box-shadow: 0 0 0 3px #ffd84d; }
 
+.celebration {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5000;
+  cursor: pointer;
+}
+
 /* ---------- controls ---------- */
 
 #controls {
@@ -251,7 +260,7 @@ dialog .cancel, dialog .primary {
   background: transparent;
   font-size: 16px;
 }
-dialog .primary { color: #fff; }
+dialog .primary { color: #fff; background: #2f8f57; border-color: #49b073; font-weight: 600; }
 
 @media (min-width: 700px) {
   h1 { font-size: 20px; }
