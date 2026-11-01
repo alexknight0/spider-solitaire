@@ -577,27 +577,36 @@ board.addEventListener("contextmenu", (e) => e.preventDefault());
 $("#undo").addEventListener("click", undo);
 $("#undo-all").addEventListener("click", undoAll);
 
+// Picking a difficulty only selects it; Start begins the game with the selected difficulty and
+// the winnable setting. Cancel leaves both unchanged.
 const newDialog = $("#new-dialog");
+let chosenSuits = 2;
+function selectSuits(suits) {
+  chosenSuits = suits;
+  newDialog.querySelectorAll("[data-suits]").forEach((b) => {
+    const on = +b.dataset.suits === suits;
+    b.classList.toggle("current", on);
+    b.setAttribute("aria-pressed", on);
+  });
+}
 $("#new").addEventListener("click", () => {
-  newDialog.querySelectorAll("[data-suits]").forEach((b) => b.classList.toggle("current", +b.dataset.suits === S.suits));
+  selectSuits(S.suits);
   $("#winnable").checked = winnableOnly();
   newDialog.showModal();
+  $("#start").focus();
 });
-newDialog.querySelectorAll("[data-suits]").forEach((b) =>
-  b.addEventListener("click", () => {
-    newDialog.close();
-    requestGame(+b.dataset.suits);
-  }),
-);
-$("#winnable").addEventListener("change", (e) => {
-  localStorage.setItem(WINNABLE_KEY, e.target.checked ? "1" : "0");
-  if (e.target.checked) prepareNext(S.suits);
+newDialog.querySelectorAll("[data-suits]").forEach((b) => b.addEventListener("click", () => selectSuits(+b.dataset.suits)));
+$("#start").addEventListener("click", () => {
+  localStorage.setItem(WINNABLE_KEY, $("#winnable").checked ? "1" : "0");
+  newDialog.close();
+  requestGame(chosenSuits);
 });
 newDialog.querySelector(".cancel").addEventListener("click", () => newDialog.close());
 newDialog.addEventListener("click", (e) => { if (e.target === newDialog) newDialog.close(); });
 
 $("#win-dialog").addEventListener("close", stopCelebration);
 $("#win-new").addEventListener("click", () => {
+  stopCelebration(); // the dialog's close event fires a moment later, after the new deal
   $("#win-dialog").close();
   requestGame(S.suits);
 });
