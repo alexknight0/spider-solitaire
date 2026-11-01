@@ -39,9 +39,9 @@ function load() {
   }
 }
 
-function startGame(suits) {
-  localStorage.setItem(SUITS_KEY, String(suits));
-  S = newGame(suits);
+function startGame(state) {
+  localStorage.setItem(SUITS_KEY, String(state.suits));
+  S = state;
   history = [];
   moves = 0;
   elapsed = 0;
@@ -52,6 +52,90 @@ function startGame(suits) {
 }
 
 const score = () => 500 - moves + 100 * S.found.length;
+
+// ---------------------------------------------------------------- winnable deals
+// With "Winnable deals only" on, solver-worker.js deals random games until solver.js finds a win.
+// One winnable deal per difficulty is found ahead of time and kept in localStorage, so New game
+// is usually instant.
+
+const WINNABLE_KEY = "spider-solitaire:winnable";
+const NEXT_KEY = "spider-solitaire:next:"; // + suits
+const winnableOnly = () => localStorage.getItem(WINNABLE_KEY) !== "0";
+
+let worker = null;
+let job = null; // { suits, promise, onProgress } for the search in progress
+let findToken = 0; // bumped when the player stops waiting for a search
+
+function findDeal(suits) {
+  if (job?.suits === suits) return job.promise;
+  worker?.terminate();
+  worker = new Worker("solver-worker.js", { type: "module" });
+  const j = { suits, onProgress: null };
+  j.promise = new Promise((resolve) => {
+    worker.onmessage = ({ data }) => {
+      if (!data.state) {
+        j.onProgress?.(data.attempt);
+        return;
+      }
+      worker.terminate();
+      worker = null;
+      job = null;
+      resolve(data.state);
+    };
+  });
+  job = j;
+  worker.postMessage({ suits });
+  return j.promise;
+}
+
+function takeCached(suits) {
+  const raw = localStorage.getItem(NEXT_KEY + suits);
+  localStorage.removeItem(NEXT_KEY + suits);
+  try {
+    return raw && JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function prepareNext(suits) {
+  if (!winnableOnly() || localStorage.getItem(NEXT_KEY + suits)) return;
+  findDeal(suits).then((s) => localStorage.setItem(NEXT_KEY + suits, JSON.stringify(s)));
+}
+
+const findDialog = $("#find-dialog");
+
+async function requestGame(suits) {
+  if (!winnableOnly()) {
+    startGame(newGame(suits));
+    return;
+  }
+  let s = takeCached(suits);
+  if (!s) {
+    const token = ++findToken;
+    $("#find-text").textContent = `Checking ${MODE_LABEL[suits]} deals…`;
+    findDialog.dataset.suits = suits;
+    findDialog.showModal();
+    findDeal(suits);
+    job.onProgress = (n) => ($("#find-text").textContent = `Checked ${n} ${MODE_LABEL[suits]} deal${n === 1 ? "" : "s"}…`);
+    s = await findDeal(suits);
+    // prepareNext may have cached this same deal; don't hand it out twice.
+    localStorage.removeItem(NEXT_KEY + suits);
+    if (token !== findToken) return;
+    findDialog.close();
+  }
+  startGame(s);
+  prepareNext(suits);
+}
+
+$("#find-any").addEventListener("click", () => {
+  const suits = +findDialog.dataset.suits;
+  findToken++;
+  findDialog.close();
+  startGame(newGame(suits));
+  prepareNext(suits); // keeps the search going for next time
+});
+findDialog.addEventListener("cancel", (e) => e.preventDefault());
 
 // ---------------------------------------------------------------- layout
 
@@ -380,20 +464,25 @@ $("#undo-all").addEventListener("click", undoAll);
 const newDialog = $("#new-dialog");
 $("#new").addEventListener("click", () => {
   newDialog.querySelectorAll("[data-suits]").forEach((b) => b.classList.toggle("current", +b.dataset.suits === S.suits));
+  $("#winnable").checked = winnableOnly();
   newDialog.showModal();
 });
 newDialog.querySelectorAll("[data-suits]").forEach((b) =>
   b.addEventListener("click", () => {
     newDialog.close();
-    startGame(+b.dataset.suits);
+    requestGame(+b.dataset.suits);
   }),
 );
+$("#winnable").addEventListener("change", (e) => {
+  localStorage.setItem(WINNABLE_KEY, e.target.checked ? "1" : "0");
+  if (e.target.checked) prepareNext(S.suits);
+});
 newDialog.querySelector(".cancel").addEventListener("click", () => newDialog.close());
 newDialog.addEventListener("click", (e) => { if (e.target === newDialog) newDialog.close(); });
 
 $("#win-new").addEventListener("click", () => {
   $("#win-dialog").close();
-  startGame(S.suits);
+  requestGame(S.suits);
 });
 
 document.addEventListener("keydown", (e) => {
@@ -427,7 +516,7 @@ window.addEventListener("resize", () => {
 // copy is common right after a deploy. The game is saved after every move, so updating
 // (which reloads the page) carries on where you left off.
 
-const APP_FILES = ["./", "index.html", "app.js", "game.js", "version.js", "style.css", "manifest.webmanifest", "icon.svg"];
+const APP_FILES = ["./", "index.html", "app.js", "game.js", "solver.js", "solver-worker.js", "version.js", "style.css", "manifest.webmanifest", "icon.svg"];
 const VERSION_CHECK_MS = 5 * 60_000;
 const versionBtn = $("#version");
 let latestVersion = null;
@@ -495,8 +584,13 @@ if (load()) {
   buildCards();
   render({ instant: true });
   if (won) win();
+  prepareNext(S.suits);
 } else {
-  startGame(+localStorage.getItem(SUITS_KEY) || 2);
+  // A blank table until the first deal arrives.
+  S = { suits: +localStorage.getItem(SUITS_KEY) || 2, cols: Array.from({ length: COLS }, () => []), stock: [], found: [] };
+  buildCards();
+  render({ instant: true });
+  requestGame(S.suits);
 }
 
 // Exposed for tests.

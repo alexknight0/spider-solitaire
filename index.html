@@ -42,7 +42,14 @@
       <button type="button" data-suits="2"><b>Medium</b><small>2 suits ♠&#xFE0E; ♥&#xFE0E;</small></button>
       <button type="button" data-suits="4"><b>Hard</b><small>4 suits ♠&#xFE0E; ♥&#xFE0E; ♣&#xFE0E; ♦&#xFE0E;</small></button>
     </div>
+    <label class="opt"><input type="checkbox" id="winnable"> Winnable deals only</label>
     <button type="button" class="cancel" value="cancel">Cancel</button>
+  </dialog>
+
+  <dialog id="find-dialog">
+    <h2>Finding a winnable deal</h2>
+    <p><span class="spinner"></span><span id="find-text"></span></p>
+    <button type="button" id="find-any" class="cancel">Play any deal instead</button>
   </dialog>
 
   <dialog id="win-dialog">
