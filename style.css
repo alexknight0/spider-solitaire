@@ -56,6 +56,14 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
   white-space: nowrap;
 }
 #stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+/* Narrow phones: the home link, title, light and stats only just fit, so tighten them, and
+   drop the suit count while the wider "Update" pill shows. */
+@media (max-width: 439px) {
+  header { gap: 4px; padding-inline: 8px; }
+  #stats { gap: 9px; }
+  header:has(.version[data-state="stale"], .version[data-state="updating"]) #mode { display: none; }
+}
+@media (max-width: 379px) { #mode { display: none; } }
 
 .version {
   display: inline-flex;
@@ -269,14 +277,12 @@ dialog .primary { color: #fff; background: #2f8f57; border-color: #49b073; font-
   #stats { font-size: 15px; gap: 18px; }
 }
 
-/* Link to the home page (alexknight0.github.io/home/), only in a normal browser tab with a mouse.
-   Hidden on phones/tablets and in installed apps, where it would open home inside this app. */
-.home-link { display: none; }
-@media (pointer: fine) and (display-mode: browser) {
-  .home-link {
-    display: inline-flex; align-items: center; flex: none; padding: 4px; border-radius: 6px;
-    color: inherit; opacity: 0.65;
-  }
-  .home-link:hover, .home-link:focus-visible { opacity: 1; }
+/* Home link (house) to /home/, on every device: in an installed app Android opens the
+   installed Home app. Bigger tap area on touch screens without changing the layout. */
+.home-link {
+  display: inline-flex; align-items: center; flex: none; padding: 4px; border-radius: 6px;
+  color: inherit; opacity: 0.65;
 }
+.home-link:hover, .home-link:focus-visible { opacity: 1; }
+@media (pointer: coarse) { .home-link { padding: 9px; margin: -5px; } }
 .home-link svg { width: 20px; height: 20px; display: block; }
